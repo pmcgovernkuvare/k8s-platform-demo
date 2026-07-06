@@ -59,6 +59,15 @@ brew install k3d kubectl helm linkerd argocd k6
 make prereqs   # verifies all of the above and checks Docker's resource allocation
 ```
 
+**Alternative: devcontainer.** `.devcontainer/` pins every runtime and CLI
+tool this repo touches (Node 20, Go 1.22, Python 3.12, .NET 8, k3d, kubectl,
+helm, linkerd CLI, argocd CLI, k6, yamllint, shellcheck, gh) at known-good
+versions, and installs each app's dependencies automatically on first build -
+open the repo in VS Code and choose "Reopen in Container." Note that k3d's
+published ports (`localhost:8080`, etc.) are bound on your actual Mac, not
+inside the devcontainer - `curl` those from a regular terminal, or use
+`host.docker.internal` from inside the devcontainer's terminal.
+
 > **Note on cluster tooling:** this repo uses [k3d](https://k3d.io/)
 > (k3s-in-Docker) rather than kind. k3d's single-process bootstrap sidesteps
 > a kind-specific failure mode we hit on corporate-managed Macs, where
@@ -126,6 +135,7 @@ make down
 ## Repository layout
 
 ```
+.devcontainer/        pinned Node/Go/Python/.NET/k3d/kubectl/helm/linkerd/argocd/k6 dev environment
 clusters/            historical kind config (deprecated - see clusters/kind-config.yaml);
                       the live k3d cluster definition is CLI flags in scripts/01-create-cluster.sh
 scripts/              numbered, idempotent setup scripts (also what Makefile calls)

@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "express": "^5.2.1",
+    "fetch": "^1.1.0",
+    "node-fetch": "^3.3.2",
+    "pino-http": "^11.0.0",
+    "prom-client": "^15.1.3"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "name": "k8s-platform-demo",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": false,
+      "upgradePackages": true
+    },
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" },
+    "ghcr.io/devcontainers/features/go:1": { "version": "1.22" },
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.12" },
+    "ghcr.io/devcontainers/features/dotnet:2": { "version": "8.0" },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": { "version": "latest" },
+    "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
+      "version": "latest",
+      "helm": "latest",
+      "minikube": "none"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "forwardPorts": [8080, 8443, 3000, 8090, 8084],
+  "portsAttributes": {
+    "8080": { "label": "Kong (HTTP)" },
+    "8443": { "label": "Kong (HTTPS)" },
+    "3000": { "label": "Grafana" },
+    "8090": { "label": "ArgoCD" },
+    "8084": { "label": "Linkerd viz dashboard" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        "golang.go",
+        "ms-python.python",
+        "ms-dotnettools.csdevkit",
+        "dbaeumer.vscode-eslint",
+        "redhat.vscode-yaml",
+        "timonwong.shellcheck"
+      ]
+    }
+  },
+  "remoteUser": "vscode"
+}
