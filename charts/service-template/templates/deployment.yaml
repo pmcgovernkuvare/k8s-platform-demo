@@ -11,7 +11,9 @@ spec:
     metadata:
       labels:
         {{- include "service-template.labels" . | nindent 8 }}
+        {{- if .Values.podLabels }}
         {{- toYaml .Values.podLabels | nindent 8 }}
+        {{- end }}
       annotations:
         {{- if .Values.mesh.inject }}
         linkerd.io/inject: enabled
@@ -20,7 +22,9 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/path: {{ .Values.observability.serviceMonitor.path | quote }}
         prometheus.io/port: {{ .Values.containerPort | quote }}
+        {{- if .Values.podAnnotations }}
         {{- toYaml .Values.podAnnotations | nindent 8 }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "service-template.fullname" . }}
       containers:
@@ -52,7 +56,9 @@ spec:
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.namespace={{ .Release.Namespace }},service.version={{ .Values.image.tag }}"
             {{- end }}
+            {{- if .Values.env }}
             {{- toYaml .Values.env | nindent 12 }}
+            {{- end }}
           {{- if .Values.envFrom }}
           envFrom: {{- toYaml .Values.envFrom | nindent 12 }}
           {{- end }}
