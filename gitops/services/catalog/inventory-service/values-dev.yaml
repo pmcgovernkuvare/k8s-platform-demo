@@ -2,7 +2,7 @@
 # Owned by: team-inventory
 image:
   repository: localhost:5001/inventory-service
-  tag: "0.1.0"
+  tag: "9cc540fd8ce6"
 replicaCount: 1
 containerPort: 8000
 resources:
