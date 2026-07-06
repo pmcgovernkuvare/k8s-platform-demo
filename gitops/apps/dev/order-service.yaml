@@ -13,13 +13,13 @@ metadata:
 spec:
   project: default
   sources:
-    - repoURL: https://github.com/YOUR_ORG/k8s-platform-demo.git
+    - repoURL: https://github.com/pmcgovernkuvare/k8s-platform-demo.git
       targetRevision: HEAD
       path: charts/service-template
       helm:
         valueFiles:
           - $values/gitops/services/catalog/order-service/values-dev.yaml
-    - repoURL: https://github.com/YOUR_ORG/k8s-platform-demo.git
+    - repoURL: https://github.com/pmcgovernkuvare/k8s-platform-demo.git
       targetRevision: HEAD
       ref: values
   destination:
