@@ -1,0 +1,19 @@
+# DEPRECATED - no longer used.
+#
+# This repo originally used kind (Kubernetes-in-Docker) for the local
+# cluster. On some corporate-managed Macs, kind's kubeadm-based bootstrap
+# hit a hard-to-diagnose failure (a post-init RBAC bootstrap step with a
+# hardcoded ~60s timeout failing under VPN/EDR network interception, even
+# with ample CPU/RAM). We switched to k3d (k3s-in-Docker), which uses a
+# much simpler single-process bootstrap with no equivalent failure mode.
+#
+# The cluster definition now lives as k3d CLI flags directly in
+# scripts/01-create-cluster.sh (not a config file) - see that script for
+# the full node/port/registry setup. This file is kept only so the change
+# shows up cleanly in git history; it is safe to delete.
+#
+# If you'd still prefer kind (e.g. you're not on a network with this
+# problem), scripts/01-create-cluster.sh's git history has the original
+# kind-based version, and the rest of the platform (Linkerd/Kong/ArgoCD/
+# observability, all of gitops/, all sample services) is 100% unaffected
+# either way - kind vs k3d only matters to that one script.

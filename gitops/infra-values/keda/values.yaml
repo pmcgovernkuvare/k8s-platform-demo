@@ -1,0 +1,10 @@
+# KEDA - Kubernetes Event-Driven Autoscaling. This is the SAME engine Azure
+# uses to scale Functions on AKS/Container Apps, which is exactly why this
+# demo piece translates so directly to "how would this really work in
+# Azure": swap Azurite for a real Storage Account connection string and the
+# ScaledObject below is unchanged.
+resources:
+  operator:
+    requests: {cpu: 50m, memory: 64Mi}
+  metricServer:
+    requests: {cpu: 50m, memory: 64Mi}

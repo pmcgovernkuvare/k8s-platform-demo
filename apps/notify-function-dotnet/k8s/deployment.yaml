@@ -1,0 +1,36 @@
+# notify-function isn't deployed through charts/service-template like the
+# other three services: its scaling model is fundamentally different (KEDA
+# drives 0->N replicas off queue depth instead of our HPA driving off CPU),
+# and it has no HTTP route of its own. It still gets Linkerd injection, an
+# OTel-wired env, and structured JSON logs like everything else, so it
+# shows up in the same Grafana/Tempo/Loki views as the rest of the platform.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notify-function
+  namespace: dev
+  labels: {app: notify-function, team: team-notifications, tier: internal}
+spec:
+  replicas: 0   # KEDA's ScaledObject (scaledobject.yaml) owns this from here on
+  selector:
+    matchLabels: {app: notify-function}
+  template:
+    metadata:
+      labels: {app: notify-function, team: team-notifications}
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      containers:
+        - name: notify-function
+          image: localhost:5001/notify-function:0.1.0
+          env:
+            - {name: FUNCTIONS_WORKER_RUNTIME, value: "dotnet-isolated"}
+            - {name: NOTIFICATIONS_QUEUE_NAME, value: "order-notifications"}
+            - {name: OTEL_SERVICE_NAME, value: "notify-function"}
+            - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://otel-collector.platform-observability.svc.cluster.local:4317"}
+            - name: AzureWebJobsStorage
+              valueFrom:
+                secretKeyRef: {name: azurewebjobsstorage, key: connectionString}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 384Mi}

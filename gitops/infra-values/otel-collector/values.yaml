@@ -1,0 +1,69 @@
+# OpenTelemetry Collector: the single OTLP ingestion point for the whole demo.
+# - Sample apps (Node/Go/Python) send OTLP traces+metrics here directly.
+# - Linkerd proxies send trace spans here (see scripts/02-install-platform.sh).
+# - Exports traces -> Tempo, metrics -> Prometheus (scrape), giving you one
+#   unbroken request lineage: Kong -> edge-api -> order-service ->
+#   inventory-service, each hop meshed by Linkerd, all spans landing in one
+#   Tempo trace correlated with Loki logs (trace_id) and Prometheus metrics
+#   (exemplars).
+mode: deployment
+replicaCount: 1
+# As of chart 0.89.0, image.repository must be set explicitly - the chart no
+# longer defaults to any image (see UPGRADING.md, "0.88.0 to 0.89.0"). We
+# need the "contrib" distribution specifically, not the slimmer
+# "opentelemetry-collector-k8s" core distro, because the k8sattributes
+# processor used in config.processors below is a contrib-only component and
+# isn't included in core.
+image:
+  repository: "otel/opentelemetry-collector-contrib"
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    protocol: TCP
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    protocol: TCP
+  metrics:
+    enabled: true
+    containerPort: 8889
+    servicePort: 8889
+    protocol: TCP
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc: {endpoint: 0.0.0.0:4317}
+        http: {endpoint: 0.0.0.0:4318}
+  processors:
+    batch: {}
+    k8sattributes: {}
+    memory_limiter:
+      check_interval: 5s
+      limit_percentage: 80
+  exporters:
+    otlp/tempo:
+      endpoint: tempo.platform-observability.svc.cluster.local:4317
+      tls: {insecure: true}
+    prometheus:
+      endpoint: 0.0.0.0:8889
+      resource_to_telemetry_conversion: {enabled: true}
+    debug:
+      verbosity: basic
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, k8sattributes, batch]
+        exporters: [otlp/tempo, debug]
+      metrics:
+        receivers: [otlp]
+        processors: [memory_limiter, k8sattributes, batch]
+        exporters: [prometheus, debug]

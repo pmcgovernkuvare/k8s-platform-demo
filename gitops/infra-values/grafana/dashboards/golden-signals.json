@@ -1,0 +1,88 @@
+{
+  "title": "Platform / Service Golden Signals (RED)",
+  "uid": "svc-golden-signals",
+  "tags": ["platform-demo", "otel", "linkerd"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-30m", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(http_server_requests_total, namespace)",
+        "refresh": 2,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(http_server_requests_total{namespace=~\"$namespace\"}, service)",
+        "refresh": 2,
+        "includeAll": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate (req/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum(rate(http_server_requests_total{namespace=~\"$namespace\", service=~\"$service\"}[5m])) by (service)", "legendFormat": "{{service}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Error Rate (%)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "100 * sum(rate(http_server_requests_errors_total{namespace=~\"$namespace\", service=~\"$service\"}[5m])) by (service) / sum(rate(http_server_requests_total{namespace=~\"$namespace\", service=~\"$service\"}[5m])) by (service)", "legendFormat": "{{service}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }
+    },
+    {
+      "id": 3,
+      "title": "p50 / p95 / p99 Latency",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(http_server_duration_seconds_bucket{namespace=~\"$namespace\", service=~\"$service\"}[5m])) by (le, service))", "legendFormat": "p50 {{service}}" },
+        { "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{namespace=~\"$namespace\", service=~\"$service\"}[5m])) by (le, service))", "legendFormat": "p95 {{service}}" },
+        { "expr": "histogram_quantile(0.99, sum(rate(http_server_duration_seconds_bucket{namespace=~\"$namespace\", service=~\"$service\"}[5m])) by (le, service))", "legendFormat": "p99 {{service}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "id": 4,
+      "title": "Linkerd Mesh Success Rate (mTLS'd traffic)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "expr": "sum(rate(response_total{namespace=~\"$namespace\", classification=\"success\"}[5m])) by (deployment) / sum(rate(response_total{namespace=~\"$namespace\"}[5m])) by (deployment)", "legendFormat": "{{deployment}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1, "min": 0 }, "overrides": [] }
+    },
+    {
+      "id": 5,
+      "title": "Live Logs for Selected Service (Loki, trace_id-linked)",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        { "expr": "{namespace=~\"$namespace\", app=~\"$service\"}" }
+      ]
+    }
+  ]
+}

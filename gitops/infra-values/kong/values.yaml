@@ -1,0 +1,48 @@
+# Kong Ingress Controller (Gateway API mode) - demo sizing.
+#
+# Gateway API support needs NO feature gate on KIC 3.x: it graduated to GA
+# in KIC 3.0 and was removed from the feature-gate list entirely (the
+# controller reconciles Gateway/HTTPRoute resources automatically whenever
+# the upstream Gateway API CRDs are present - see scripts/01-create-cluster.sh,
+# which installs them). An earlier version of this file set
+# `feature_gates: "GatewayAPI=true"`, which crashed kong-controller outright
+# on startup: "GatewayAPI is not a valid feature" (confirmed via
+# `kubectl logs <pod> --previous`) - the gate was never named "GatewayAPI"
+# even historically (it was "Gateway"), and by 3.x it doesn't exist at all.
+# Do not re-add a feature_gates entry for this.
+#
+# The Prometheus plugin (gateway-level RED metrics next to Linkerd's
+# service-level metrics) is applied SEPARATELY, after this release exists -
+# see gitops/infra-values/kong/prometheus-plugin.yaml, applied by
+# scripts/02-install-platform.sh right after this `helm install` succeeds.
+# An earlier version of this file referenced that plugin's ConfigMap here
+# via `plugins.configMaps`, which made the controller/gateway pods wait
+# indefinitely on a ConfigMap that didn't exist yet at install time
+# (chicken-and-egg: the CRD backing that resource doesn't exist until Kong
+# itself is installed) - that's what caused `kong-controller`/`kong-gateway`
+# to sit at "0/1 Available" until `--wait --timeout 5m` gave up. Do not
+# re-add a plugins/configMaps reference here either; apply plugin config as
+# a post-install step instead.
+controller:
+  ingressController:
+    enabled: true
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+gateway:
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+env:
+  role: traditional
+  # The "expressions" router is Kong's recommended router flavor for full
+  # Gateway API route-matching support (header/weight matching etc. beyond
+  # simple path routing) - a good default now that Gateway API is GA,
+  # independent of the feature-gate issue above.
+  router_flavor: expressions
+proxy:
+  type: NodePort
+  http:
+    enabled: true
+    nodePort: 30080
+  tls:
+    enabled: true
+    nodePort: 30443

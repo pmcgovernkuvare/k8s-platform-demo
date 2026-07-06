@@ -1,0 +1,35 @@
+# queue-bridge / dev
+# Owned by: team-notifications
+# The event-driven demo (Azure Functions + KEDA) is wired up in dev only -
+# the pattern extends to test/prod exactly like the other three services
+# (copy this file to values-test.yaml/values-prod.yaml, open a PR), it's
+# just kept to one environment here to keep the "optional extra" additive
+# and easy to skip if you don't need the Azure Functions story for a
+# given demo.
+image:
+  repository: localhost:5001/queue-bridge
+  tag: "0.1.0"
+replicaCount: 1
+containerPort: 8001
+resources:
+  requests: {cpu: 25m, memory: 48Mi}
+  limits: {cpu: 250m, memory: 192Mi}
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+team: team-notifications
+tier: internal
+route:
+  enabled: false
+mesh:
+  inject: true
+env:
+  - name: NOTIFICATIONS_QUEUE_NAME
+    value: "order-notifications"
+  - name: AZURE_STORAGE_CONNECTION_STRING
+    value: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;QueueEndpoint=http://azurite.platform-azure.svc.cluster.local:10001/devstoreaccount1;"
+networkPolicy:
+  enabled: true
+  allowFromNamespaces: ["dev", "platform-observability"]
+  allowIntraNamespace: true

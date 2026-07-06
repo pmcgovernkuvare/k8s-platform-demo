@@ -1,0 +1,24 @@
+# The core of the "looks just like Azure, runs on your laptop" story: KEDA
+# watches the depth of the order-notifications queue in Azurite and scales
+# the notify-function Deployment from 0 up to 5 pods. Idle demo = 0 pods
+# running (no cost, no noise on the dashboards); place a burst of orders
+# and watch replicas climb in real time on the golden-signals dashboard and
+# `kubectl get pods -n dev -w`.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: notify-function
+  namespace: dev
+spec:
+  scaleTargetRef:
+    name: notify-function
+  minReplicaCount: 0
+  maxReplicaCount: 5
+  cooldownPeriod: 30
+  pollingInterval: 5
+  triggers:
+    - type: azure-queue
+      metadata:
+        queueName: order-notifications
+        queueLength: "5"
+        connectionFromEnv: AzureWebJobsStorage

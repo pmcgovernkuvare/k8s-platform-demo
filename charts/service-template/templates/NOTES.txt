@@ -1,0 +1,10 @@
+{{ include "service-template.name" . }} deployed to namespace {{ .Release.Namespace }}.
+
+  Service (cluster-internal): http://{{ include "service-template.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  {{- if .Values.route.enabled }}
+  Gateway route:            http://{{ .Values.route.hostname }}{{ .Values.route.path }}  (via Kong)
+  {{- end }}
+
+Check rollout:
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "service-template.fullname" . }}
+  linkerd -n {{ .Release.Namespace }} viz stat deploy/{{ include "service-template.fullname" . }}

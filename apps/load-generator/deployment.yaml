@@ -1,0 +1,29 @@
+# Not GitOps-managed on purpose - this is a demo convenience, not an
+# application. Apply/remove it manually as needed:
+#   kubectl apply -f apps/load-generator/deployment.yaml
+#   kubectl delete -f apps/load-generator/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-generator
+  namespace: dev
+  labels: {app: load-generator}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: load-generator}
+  template:
+    metadata:
+      labels: {app: load-generator}
+      annotations:
+        linkerd.io/inject: enabled
+    spec:
+      containers:
+        - name: load-generator
+          image: localhost:5001/load-generator:0.1.0
+          env:
+            - {name: TARGET_URL, value: "http://kong-gateway-proxy.platform-gateway.svc.cluster.local"}
+            - {name: INTERVAL_SECONDS, value: "1"}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 64Mi}

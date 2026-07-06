@@ -1,0 +1,90 @@
+# kube-prometheus-stack: Prometheus + Alertmanager + Grafana + node/kube-state metrics.
+# Grafana here is the ONE pane of glass: we provision Prometheus, Loki and
+# Tempo as datasources in it (see grafana/datasources-configmap.yaml) with
+# exemplar/trace-correlation wired up so you can click a slow point on a
+# latency graph and jump straight to the Tempo trace, then to the Loki logs
+# for that same trace_id.
+grafana:
+  adminPassword: "" # auto-generated secret if left blank; script prints it
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL
+    datasources:
+      enabled: true
+  resources:
+    requests: {cpu: 100m, memory: 192Mi}
+  grafana.ini:
+    feature_toggles:
+      enable: "traceqlEditor tempoApmTable"
+
+prometheus:
+  prometheusSpec:
+    retention: 6h
+    resources:
+      requests: {cpu: 200m, memory: 512Mi}
+    additionalScrapeConfigs:
+      - job_name: linkerd-controller
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces: {names: [linkerd]}
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            action: keep
+            regex: admin-http
+      - job_name: linkerd-proxy
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            action: keep
+            regex: linkerd-proxy
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            action: keep
+            regex: linkerd-admin
+      - job_name: kong
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces: {names: [platform-gateway]}
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            action: keep
+            regex: kong
+      - job_name: otel-collector
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces: {names: [platform-observability]}
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+            action: keep
+            regex: opentelemetry-collector
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests: {cpu: 50m, memory: 64Mi}
+
+additionalPrometheusRulesMap:
+  service-slo-rules:
+    groups:
+      - name: service-golden-signals
+        rules:
+          - alert: HighErrorRate
+            expr: |
+              sum(rate(http_server_requests_errors_total[5m])) by (service)
+              /
+              sum(rate(http_server_requests_total[5m])) by (service) > 0.05
+            for: 2m
+            labels: {severity: warning}
+            annotations:
+              summary: "{{ $labels.service }} error rate above 5%"
+          - alert: HighP95Latency
+            expr: |
+              histogram_quantile(0.95,
+                sum(rate(http_server_duration_seconds_bucket[5m])) by (le, service)
+              ) > 0.5
+            for: 5m
+            labels: {severity: warning}
+            annotations:
+              summary: "{{ $labels.service }} p95 latency above 500ms"

@@ -1,0 +1,76 @@
+# Default values - every field here can be overridden per service/per
+# environment in gitops/services/catalog/<service>/values-<env>.yaml
+# This is the "templatized YAML" contract between app teams and the platform.
+
+nameOverride: ""
+
+image:
+  repository: ""          # required, e.g. localhost:5001/edge-api
+  tag: ""                  # required, e.g. git SHA or semver - set by CI on build
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+containerPort: 8080
+
+env: []                    # extra plain env vars: [{name: FOO, value: bar}]
+envFrom: []                 # e.g. [{configMapRef: {name: my-config}}]
+
+resources:
+  requests: {cpu: 50m, memory: 64Mi}
+  limits: {cpu: 500m, memory: 256Mi}
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+probes:
+  liveness: {path: /healthz, initialDelaySeconds: 5, periodSeconds: 10}
+  readiness: {path: /readyz, initialDelaySeconds: 3, periodSeconds: 5}
+
+# -- Service mesh (Linkerd) ---------------------------------------------
+mesh:
+  inject: true              # adds linkerd.io/inject: enabled at the pod level
+  serviceProfile:
+    enabled: false           # set true + define routes[] for per-route mesh metrics/retries
+
+# -- API Gateway (Kong via Gateway API) ----------------------------------
+route:
+  enabled: false             # only edge-facing services (e.g. edge-api) need a route
+  hostname: ""                 # e.g. demo.local
+  path: /
+  gatewayName: kong
+  gatewayNamespace: platform-gateway
+  stripPrefix: false
+
+# -- Observability --------------------------------------------------------
+observability:
+  serviceMonitor:
+    enabled: true
+    path: /metrics
+    interval: 15s
+  otel:
+    enabled: true
+    exporterEndpoint: "http://otel-collector.platform-observability.svc.cluster.local:4317"
+    # service.name / service.namespace resource attrs are injected automatically
+
+# -- Governance -------------------------------------------------------------
+networkPolicy:
+  enabled: true
+  allowFromNamespaces: ["platform-gateway", "platform-observability"]
+  allowIntraNamespace: true
+
+podAnnotations: {}
+podLabels: {}
+serviceAccount:
+  create: true
+  annotations: {}
+
+team: ""            # required - ownership label, drives alert routing
+tier: "internal"     # internal | edge - edge implies route.enabled expectation

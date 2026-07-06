@@ -1,0 +1,36 @@
+# GitOps Application for 'inventory-service' in the 'prod' environment.
+# This is the ONLY file a dev team edits to change what's running: bump
+# gitops/services/catalog/inventory-service/values-prod.yaml (image tag, replicas,
+# resources, route) and open a PR. Infra/devops reviews the PR (protected
+# branch + CODEOWNERS on gitops/**), merges it, and ArgoCD's automated sync
+# takes it from there - no one runs kubectl/helm by hand against prod.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: inventory-service-prod
+  namespace: platform-gitops
+  labels: {team: platform-demo, env: prod, service: inventory-service}
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/YOUR_ORG/k8s-platform-demo.git
+      targetRevision: HEAD
+      path: charts/service-template
+      helm:
+        valueFiles:
+          - $values/gitops/services/catalog/inventory-service/values-prod.yaml
+    - repoURL: https://github.com/YOUR_ORG/k8s-platform-demo.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 3
+      backoff: {duration: 5s, factor: 2, maxDuration: 1m}

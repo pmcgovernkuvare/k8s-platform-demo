@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-prometheus-plugin
+  namespace: platform-gateway
+data:
+  config: |
+    {}
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongClusterPlugin
+metadata:
+  name: prometheus
+  labels:
+    global: "true"
+plugin: prometheus

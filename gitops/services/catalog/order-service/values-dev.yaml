@@ -1,0 +1,35 @@
+# order-service / dev
+# Owned by: team-orders
+image:
+  repository: localhost:5001/order-service
+  tag: "0.1.0"
+replicaCount: 1
+containerPort: 8080
+resources:
+  requests: {cpu: 25m, memory: 48Mi}
+  limits: {cpu: 250m, memory: 192Mi}
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 2
+team: team-orders
+tier: internal
+route:
+  enabled: false
+mesh:
+  inject: true
+  serviceProfile:
+    enabled: true
+    routes:
+      - name: check-inventory
+        condition: {method: GET, pathRegex: "/inventory/[^/]+"}
+        isRetryable: true
+env:
+  - name: INVENTORY_SERVICE_URL
+    value: "http://inventory-service.dev.svc.cluster.local"
+  - name: NOTIFICATION_SERVICE_URL
+    value: "http://queue-bridge.dev.svc.cluster.local"
+networkPolicy:
+  enabled: true
+  allowFromNamespaces: ["dev", "platform-observability"]
+  allowIntraNamespace: true

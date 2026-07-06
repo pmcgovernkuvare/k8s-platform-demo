@@ -1,0 +1,36 @@
+# edge-api / prod
+# Owned by: team-storefront
+# Change this file + open a PR to change anything about how edge-api runs
+# in prod. CI (ci/.github/workflows/pr-validate.yml) lints and smoke-tests
+# every change before a human reviews it.
+image:
+  repository: localhost:5001/edge-api
+  tag: "0.1.0"          # bumped automatically by CI on merge to main / promotion PRs
+replicaCount: 3
+containerPort: 3000
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: 1000m, memory: 512Mi}
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 8
+team: team-storefront
+tier: edge
+route:
+  enabled: true
+  hostname: "edge-api.prod.demo.local"
+  path: /
+mesh:
+  inject: true
+  serviceProfile:
+    enabled: true
+    routes:
+      - name: place-order
+        condition: {method: POST, pathRegex: "/orders"}
+        isRetryable: true
+      - name: get-order
+        condition: {method: GET, pathRegex: "/orders/[^/]+"}
+env:
+  - name: ORDER_SERVICE_URL
+    value: "http://order-service.prod.svc.cluster.local"

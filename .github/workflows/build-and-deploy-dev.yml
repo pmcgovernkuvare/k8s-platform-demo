@@ -1,0 +1,87 @@
+# Runs after a PR merges to main (i.e. after everything in pr-validate.yml
+# already passed and a human approved it). Builds+pushes an image tagged
+# with the commit SHA, then bumps gitops/services/catalog/<service>/values-dev.yaml
+# with that tag and commits it back to main.
+#
+# That commit is the ENTIRE deploy step - ArgoCD's automated sync (see
+# gitops/apps/dev/*.yaml) picks up the change within seconds and rolls dev.
+# No `kubectl`, no `helm upgrade`, nobody needs cluster credentials.
+name: Build & Deploy to Dev
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            edge-api: ['apps/edge-api-node/**']
+            order-service: ['apps/order-service-go/**']
+            inventory-service: ['apps/inventory-service-python/**']
+            queue-bridge: ['apps/queue-bridge-python/**']
+            notify-function: ['apps/notify-function-dotnet/**']
+
+  build-and-bump:
+    needs: changes
+    if: needs.changes.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+
+      - name: Map service name -> app directory
+        id: map
+        run: |
+          declare -A DIRS=(
+            [edge-api]=apps/edge-api-node
+            [order-service]=apps/order-service-go
+            [inventory-service]=apps/inventory-service-python
+            [queue-bridge]=apps/queue-bridge-python
+            [notify-function]=apps/notify-function-dotnet
+          )
+          echo "dir=${DIRS[${{ matrix.service }}]}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        id: build
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_SHA::12}"
+          IMG="ghcr.io/${{ github.repository }}/${{ matrix.service }}:${TAG}"
+          docker build -t "$IMG" "${{ steps.map.outputs.dir }}"
+          docker push "$IMG"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Bump dev values with new image tag
+        run: |
+          set -euo pipefail
+          FILE="gitops/services/catalog/${{ matrix.service }}/values-dev.yaml"
+          sed -i "s#^  tag: .*#  tag: \"${{ steps.build.outputs.tag }}\"#" "$FILE"
+          git config user.name "platform-ci-bot"
+          git config user.email "platform-ci-bot@users.noreply.github.com"
+          git add "$FILE"
+          git commit -m "ci: deploy ${{ matrix.service }}@${{ steps.build.outputs.tag }} to dev [skip ci]"
+          git push

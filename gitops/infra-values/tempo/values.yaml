@@ -1,0 +1,14 @@
+# Tempo: trace storage, receives OTLP from the OTel Collector.
+tempo:
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+  retention: 6h
+  metricsGenerator:
+    enabled: true          # derives RED metrics FROM traces (span metrics) -> Prometheus
+    remoteWriteUrl: "http://kps-kube-prometheus-stack-prometheus.platform-observability.svc.cluster.local:9090/api/v1/write"
+traces:
+  otlp:
+    grpc: {enabled: true}
+    http: {enabled: true}
+persistence:
+  enabled: false

@@ -1,0 +1,10 @@
+node_modules/
+__pycache__/
+*.pyc
+bin/
+obj/
+.vs/
+tests/results/*.json
+tests/results/*.log
+*.tgz
+.DS_Store

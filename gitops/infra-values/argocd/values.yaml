@@ -1,0 +1,27 @@
+# ArgoCD - demo sizing, insecure (no TLS) server for simplicity of local access.
+configs:
+  params:
+    server.insecure: true
+  cm:
+    # Let ArgoCD apps auto-detect Helm charts under gitops/services + charts/
+    application.resourceTrackingMethod: annotation
+    timeout.reconciliation: 30s
+server:
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+  service:
+    # NodePort here (rather than a `kubectl patch svc argocd-server` step in
+    # scripts/02-install-platform.sh) so `helm upgrade --install` owns the
+    # whole Service via server-side apply - a separate kubectl-patch field
+    # manager on the same fields breaks every rerun with a field-manager
+    # conflict. Field names confirmed against argo-helm's
+    # charts/argo-cd/templates/argocd-server/service.yaml.
+    type: NodePort
+    nodePortHttp: 30081
+repoServer:
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+applicationSet:
+  enabled: true
+notifications:
+  enabled: false

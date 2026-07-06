@@ -1,0 +1,37 @@
+# Infra/devops oversight, enforced by GitHub branch protection + required
+# reviews (Settings -> Branches -> main -> Require review from Code Owners).
+# App teams can freely edit their own values files; anything that touches
+# the shared chart, cluster bootstrap, or another team's namespace needs a
+# platform-team sign-off.
+
+# The shared chart every service uses - platform team owns behavior changes here.
+/charts/                                   @your-org/platform-team
+
+# Cluster bootstrap, install scripts, kind config.
+/scripts/                                  @your-org/platform-team
+/clusters/                                 @your-org/platform-team
+
+# Shared platform infra values (mesh, gateway, observability, gitops).
+/gitops/infra-values/                      @your-org/platform-team
+/gitops/bootstrap/                         @your-org/platform-team
+
+# Promotion into test/prod always needs platform sign-off, even though dev
+# is self-service for app teams.
+/gitops/apps/test/                         @your-org/platform-team
+/gitops/apps/prod/                         @your-org/platform-team
+/gitops/services/catalog/*/values-test.yaml @your-org/platform-team
+/gitops/services/catalog/*/values-prod.yaml @your-org/platform-team
+
+# Per-team service ownership (app teams self-serve on dev + their own app code).
+/apps/edge-api-node/                       @your-org/team-storefront
+/gitops/services/catalog/edge-api/values-dev.yaml   @your-org/team-storefront
+
+/apps/order-service-go/                    @your-org/team-orders
+/gitops/services/catalog/order-service/values-dev.yaml @your-org/team-orders
+
+/apps/inventory-service-python/            @your-org/team-inventory
+/gitops/services/catalog/inventory-service/values-dev.yaml @your-org/team-inventory
+
+/apps/queue-bridge-python/                 @your-org/team-notifications
+/apps/notify-function-dotnet/              @your-org/team-notifications
+/gitops/services/catalog/queue-bridge/     @your-org/team-notifications

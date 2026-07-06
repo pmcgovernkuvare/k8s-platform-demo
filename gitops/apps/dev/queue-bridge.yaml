@@ -1,0 +1,28 @@
+# See gitops/apps/dev/edge-api.yaml for the pattern this follows.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: queue-bridge-dev
+  namespace: platform-gitops
+  labels: {team: platform-demo, env: dev, service: queue-bridge}
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/YOUR_ORG/k8s-platform-demo.git
+      targetRevision: HEAD
+      path: charts/service-template
+      helm:
+        valueFiles:
+          - $values/gitops/services/catalog/queue-bridge/values-dev.yaml
+    - repoURL: https://github.com/YOUR_ORG/k8s-platform-demo.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated: {prune: true, selfHeal: true}
+    syncOptions: [CreateNamespace=false]
+    retry:
+      limit: 3
+      backoff: {duration: 5s, factor: 2, maxDuration: 1m}

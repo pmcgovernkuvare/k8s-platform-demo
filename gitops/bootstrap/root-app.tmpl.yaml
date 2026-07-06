@@ -1,0 +1,26 @@
+# App-of-apps root: one per environment. ArgoCD watches gitops/apps/__ENV__/
+# and creates/updates/removes an Application for every manifest it finds
+# there - so adding a new service to an environment is "add one YAML file
+# and open a PR", nothing more.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-__ENV__
+  namespace: platform-gitops
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  source:
+    repoURL: __REPO_URL__
+    targetRevision: HEAD
+    path: gitops/apps/__ENV__
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: __ENV__
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions: [CreateNamespace=false]

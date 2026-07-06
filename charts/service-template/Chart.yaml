@@ -1,0 +1,12 @@
+apiVersion: v2
+name: service-template
+description: >
+  Generic, opinionated chart for any team's HTTP service. Developers only
+  ever edit a values file (see gitops/services/catalog/<service>/values-<env>.yaml)
+  - this chart supplies the Deployment, Service, HPA, PDB, NetworkPolicy,
+  ServiceMonitor, Kong route, Linkerd mesh annotations and OTel wiring
+  consistently for every service and every environment. Infra/devops owns
+  changes to this chart via PR review; app teams own their values files.
+type: application
+version: 1.3.0
+appVersion: "1.0"

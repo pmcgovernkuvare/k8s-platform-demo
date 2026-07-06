@@ -1,0 +1,24 @@
+# inventory-service / dev
+# Owned by: team-inventory
+image:
+  repository: localhost:5001/inventory-service
+  tag: "0.1.0"
+replicaCount: 1
+containerPort: 8000
+resources:
+  requests: {cpu: 25m, memory: 48Mi}
+  limits: {cpu: 250m, memory: 192Mi}
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 2
+team: team-inventory
+tier: internal
+route:
+  enabled: false
+mesh:
+  inject: true
+networkPolicy:
+  enabled: true
+  allowFromNamespaces: ["dev", "platform-observability"]
+  allowIntraNamespace: true

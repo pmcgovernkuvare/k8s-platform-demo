@@ -1,0 +1,9 @@
+{{- if .Values.mesh.serviceProfile.enabled }}
+apiVersion: linkerd.io/v1alpha2
+kind: ServiceProfile
+metadata:
+  name: {{ include "service-template.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  namespace: {{ .Release.Namespace }}
+spec:
+  routes: {{- toYaml .Values.mesh.serviceProfile.routes | nindent 4 }}
+{{- end }}

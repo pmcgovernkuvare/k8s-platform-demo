@@ -1,0 +1,36 @@
+# GitOps Application for 'edge-api' in the 'dev' environment.
+# This is the ONLY file a dev team edits to change what's running: bump
+# gitops/services/catalog/edge-api/values-dev.yaml (image tag, replicas,
+# resources, route) and open a PR. Infra/devops reviews the PR (protected
+# branch + CODEOWNERS on gitops/**), merges it, and ArgoCD's automated sync
+# takes it from there - no one runs kubectl/helm by hand against dev.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: edge-api-dev
+  namespace: platform-gitops
+  labels: {team: platform-demo, env: dev, service: edge-api}
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/YOUR_ORG/k8s-platform-demo.git
+      targetRevision: HEAD
+      path: charts/service-template
+      helm:
+        valueFiles:
+          - $values/gitops/services/catalog/edge-api/values-dev.yaml
+    - repoURL: https://github.com/YOUR_ORG/k8s-platform-demo.git
+      targetRevision: HEAD
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 3
+      backoff: {duration: 5s, factor: 2, maxDuration: 1m}

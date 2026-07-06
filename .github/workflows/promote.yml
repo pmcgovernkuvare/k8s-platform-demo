@@ -1,0 +1,78 @@
+# Manually-triggered promotion: dev -> test or test -> prod. This is the
+# literal implementation of "infra/devops oversight through PRs" - a human
+# picks the service/environment/image tag to promote, this workflow opens a
+# PR (not a direct commit) against the target values file, CODEOWNERS
+# forces platform-team review on anything touching gitops/apps/test or
+# gitops/apps/prod (see .github/CODEOWNERS), and ArgoCD only rolls the
+# target environment once that PR is reviewed and merged.
+name: Promote Service
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: 'Service to promote'
+        required: true
+        type: choice
+        options: [edge-api, order-service, inventory-service, queue-bridge]
+      target_environment:
+        description: 'Environment to promote into'
+        required: true
+        type: choice
+        options: [test, prod]
+      image_tag:
+        description: 'Image tag to promote (defaults to the tag currently running in the environment below it)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine source environment and tag
+        id: source
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.target_environment }}" = "test" ]; then
+            SRC_FILE="gitops/services/catalog/${{ inputs.service }}/values-dev.yaml"
+          else
+            SRC_FILE="gitops/services/catalog/${{ inputs.service }}/values-test.yaml"
+          fi
+          TAG="${{ inputs.image_tag }}"
+          if [ -z "$TAG" ]; then
+            TAG=$(grep -E '^\s*tag:' "$SRC_FILE" | head -1 | sed -E 's/.*tag:\s*"?([^"]+)"?/\1/')
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Bump target environment's values file
+        run: |
+          set -euo pipefail
+          FILE="gitops/services/catalog/${{ inputs.service }}/values-${{ inputs.target_environment }}.yaml"
+          sed -i "s#^  tag: .*#  tag: \"${{ steps.source.outputs.tag }}\"#" "$FILE"
+
+      - name: Open promotion PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "promote: ${{ inputs.service }}@${{ steps.source.outputs.tag }} -> ${{ inputs.target_environment }}"
+          branch: "promote/${{ inputs.service }}-${{ inputs.target_environment }}-${{ steps.source.outputs.tag }}"
+          title: "Promote ${{ inputs.service }}@${{ steps.source.outputs.tag }} to ${{ inputs.target_environment }}"
+          body: |
+            Automated promotion request.
+
+            | | |
+            |---|---|
+            | Service | `${{ inputs.service }}` |
+            | Target environment | `${{ inputs.target_environment }}` |
+            | Image tag | `${{ steps.source.outputs.tag }}` |
+            | Requested by | @${{ github.actor }} |
+
+            Merging this PR is the ONLY action needed to deploy - ArgoCD syncs
+            `${{ inputs.target_environment }}` automatically once it's merged.
+            CODEOWNERS requires platform-team review before this can merge.
+          labels: promotion,${{ inputs.target_environment }}

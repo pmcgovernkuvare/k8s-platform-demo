@@ -1,0 +1,44 @@
+# Loki, single-binary demo deployment (filesystem storage - fine for a laptop
+# demo, swap for S3/GCS + distributed mode for anything real).
+deploymentMode: SingleBinary
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index: {prefix: index_, period: 24h}
+  limits_config:
+    retention_period: 24h
+    ingestion_rate_mb: 16
+    ingestion_burst_size_mb: 32
+singleBinary:
+  replicas: 1
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+# The chart's "simple scalable" targets (backend/read/write) default to
+# nonzero replicas regardless of deploymentMode - setting deploymentMode:
+# SingleBinary above does NOT zero these out on its own. Leaving them at
+# their defaults trips templates/validate.yaml: "You have more than zero
+# replicas configured for both the single binary and simple scalable
+# targets" (confirmed against grafana/loki's validate.yaml). Zero them
+# explicitly so only the single-binary target runs.
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+gateway:
+  enabled: true
+monitoring:
+  selfMonitoring: {enabled: false}
+  lokiCanary: {enabled: false}
+test:
+  enabled: false
