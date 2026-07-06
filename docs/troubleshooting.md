@@ -64,6 +64,43 @@ Almost always the `repoURL` placeholder. `gitops/apps/*/*.yaml` and
 your own GitHub org and either edit those files or re-run
 `scripts/04-bootstrap-gitops.sh` with `GITOPS_REPO_URL` set.
 
+**`dev`/`test`/`prod` namespace has zero pods, ArgoCD Application health
+looks fine but nothing is actually running**
+Check `kubectl -n <env> get events --sort-by='.lastTimestamp'` for
+`FailedCreate ... forbidden: failed quota: <env>-quota: must specify
+limits.cpu for: linkerd-init,linkerd-proxy; limits.memory for:
+linkerd-init,linkerd-proxy`. `scripts/01-create-cluster.sh`'s per-namespace
+ResourceQuota tracks `limits.cpu`/`limits.memory`, which means *every*
+container in a pod - including Linkerd's auto-injected `linkerd-init` and
+`linkerd-proxy` sidecars - must declare explicit resource limits, not just
+requests, or the pod is rejected outright at admission. `scripts/02-install-platform.sh`
+now sets `proxy.resources.cpu.limit`/`proxy.resources.memory.limit`
+alongside the existing `.request` values to fix this. If you hit this on an
+already-installed cluster, `make up` (or `bash scripts/02-install-platform.sh`
+directly) will now run `linkerd upgrade` with the fix and your existing
+ReplicaSets - which have been retrying continuously since they were
+created - should succeed within their next retry cycle, no manual restart
+needed.
+
+**A new meshed pod hangs in `Init:`/`0/2` Ready, `linkerd-proxy` logs show
+"invalid peer certificate: certificate expired", but `kubectl get pods -A`
+shows every OTHER meshed pod is running fine**
+This means the Linkerd control plane itself (destination/identity/policy)
+has been running long enough that something in its live TLS state has gone
+stale and it's now serving an already-expired certificate to any NEW pod
+trying to establish identity - existing meshed pods are unaffected because
+their connections were established before this happened. Confirm the
+control plane's actual *stored* certs are fine first
+(`kubectl -n linkerd get secret linkerd-identity-issuer -o
+jsonpath='{.data.crt\.pem}' | base64 -d | openssl x509 -noout -dates`) - if
+those dates check out, the fix is a plain control-plane restart, not a
+cert-rotation task: `kubectl -n linkerd rollout restart deploy/linkerd-destination
+deploy/linkerd-identity deploy/linkerd-proxy-injector`. This is unrelated to
+edge vs. stable release channels (the Linkerd OSS project hasn't shipped
+"stable" artifacts since February 2024 - edge releases are the only
+official option, see https://linkerd.io/releases/) - it's a general
+long-running-control-plane condition that can happen on any version.
+
 **No traces showing up in Tempo**
 Check the OTel Collector's logs (`kubectl -n platform-observability logs
 deploy/otel-collector-opentelemetry-collector`) - the `debug` exporter

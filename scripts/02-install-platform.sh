@@ -9,13 +9,39 @@ cd "$(dirname "$0")/.."
 KCTX="k3d-platform-demo"
 
 echo "== Linkerd: control plane =="
-# Idempotent: `linkerd check --pre` deliberately FAILS if Linkerd is already
-# installed (it's a pre-flight check, not a health check), so re-running
-# this script after a partial failure further down (e.g. the Kong step)
-# would abort here even though Linkerd itself is fine. Guard on whether the
-# linkerd namespace already exists instead.
+# All `--set` flags for `linkerd install`/`linkerd upgrade` are combined into
+# ONE call below (resource requests+limits AND OTel tracing config together).
+# An earlier version of this script split these across three separate
+# `linkerd install | kubectl apply` invocations - each one regenerates the
+# ENTIRE manifest from only the flags passed to THAT call, so the later
+# tracing-only call was silently resetting the proxy's resources back to
+# blank/unset, since it didn't repeat the resource flags. That combined with
+# dev/test/prod's ResourceQuota tracking limits.cpu/limits.memory (see
+# scripts/01-create-cluster.sh) - which requires EVERY container in a pod,
+# including auto-injected linkerd-init/linkerd-proxy sidecars, to declare
+# explicit limits - meant every meshed pod in those namespaces was rejected
+# at admission with "must specify limits.cpu for: linkerd-init,linkerd-proxy"
+# and never actually ran. Setting explicit cpu/memory limits (not just
+# requests) here is the fix; keeping every flag in one call avoids the
+# clobbering bug that made it easy to silently lose this fix again.
+#
+# `linkerd check --pre` deliberately FAILS if Linkerd is already installed
+# (it's a pre-flight check, not a health check), so this only runs on a
+# genuinely fresh cluster. On a rerun, `linkerd upgrade` (idempotent, reuses
+# existing trust anchor/issuer certs) is used instead of skipping entirely -
+# skipping meant this resource-limits fix (or any future config change here)
+# would never reach an already-installed cluster on `make up` reruns.
+LINKERD_SET_FLAGS=(
+  --set proxy.resources.cpu.request=50m
+  --set proxy.resources.memory.request=32Mi
+  --set proxy.resources.cpu.limit=250m
+  --set proxy.resources.memory.limit=128Mi
+  --set proxy.trace.serviceName=linkerd-proxy
+  --set proxy.trace.collector.addr=otel-collector.platform-observability:4317
+)
 if kubectl --context "$KCTX" get namespace linkerd >/dev/null 2>&1; then
-  echo "linkerd namespace already exists, skipping install"
+  echo "linkerd namespace already exists, upgrading in place"
+  linkerd upgrade --context "$KCTX" "${LINKERD_SET_FLAGS[@]}" | kubectl apply --context "$KCTX" -f -
   # Deliberately NOT calling `linkerd check` here: it auto-detects and
   # includes checks for every installed EXTENSION too (viz, etc.), and
   # viz's self-check queries the shared kube-prometheus-stack Prometheus
@@ -30,10 +56,7 @@ if kubectl --context "$KCTX" get namespace linkerd >/dev/null 2>&1; then
 else
   linkerd check --pre --context "$KCTX"
   linkerd install --crds --context "$KCTX" | kubectl apply --context "$KCTX" -f -
-  linkerd install --context "$KCTX" \
-    --set proxy.resources.cpu.request=50m \
-    --set proxy.resources.memory.request=32Mi \
-    | kubectl apply --context "$KCTX" -f -
+  linkerd install --context "$KCTX" "${LINKERD_SET_FLAGS[@]}" | kubectl apply --context "$KCTX" -f -
   linkerd check --context "$KCTX"
 fi
 
@@ -63,12 +86,15 @@ kubectl -n linkerd-viz --context "$KCTX" patch svc web -p \
   '{"spec": {"type": "NodePort", "ports": [{"port": 8084, "nodePort": 30320, "targetPort": 8084}]}}'
 
 echo "== Linkerd: OpenTelemetry trace export from the proxies =="
-# Linkerd's proxies can emit spans for every meshed request. We point them at
-# the shared OTel Collector (installed in step 03) which forwards to Tempo.
-linkerd install --context "$KCTX" \
-  --set proxy.trace.serviceName=linkerd-proxy \
-  --set proxy.trace.collector.addr=otel-collector.platform-observability:4317 \
-  | kubectl apply --context "$KCTX" -f - || true
+# Linkerd's proxies can emit spans for every meshed request, pointed at the
+# shared OTel Collector (installed in step 03) which forwards to Tempo -
+# already configured above as part of LINKERD_SET_FLAGS in the same
+# `linkerd install`/`linkerd upgrade` call that sets proxy resource
+# requests/limits, rather than as a separate `linkerd install` invocation
+# here. A separate call would regenerate the full manifest from ONLY the
+# flags passed to it, silently resetting proxy resources back to blank -
+# see the big comment on the Linkerd control plane step above for why that
+# combination broke every meshed pod in dev/test/prod.
 
 echo "== Auto-inject the mesh into dev/test/prod =="
 for ns in dev test prod; do

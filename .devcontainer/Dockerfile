@@ -7,6 +7,17 @@
 # yamllint, shellcheck, gh.
 FROM mcr.microsoft.com/devcontainers/base:ubuntu-22.04
 
+# Without this, `curl ... | sh` in a RUN step only reports the LAST command's
+# (sh's) exit code - if curl fails (network blip, bad URL, whatever) and
+# produces no output, `sh` gets empty stdin and exits 0 successfully having
+# done nothing at all, so the RUN step reports success even though nothing
+# got installed. This is exactly what silently happened to the linkerd
+# install below on a real build - the binary never existed, the build never
+# complained, and it only surfaced much later as a confusing "command not
+# found" inside the running devcontainer. -o pipefail makes any command's
+# failure within a pipe fail the whole RUN step immediately and loudly.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # Every curl-piped-install below uses -fsSL (fail on HTTP error, follow
 # redirects) rather than a bare -s. A plain `curl -s` that hits a redirect
 # or an error page fails SILENTLY - piped into `gpg --dearmor` it produces a
@@ -40,21 +51,44 @@ RUN dpkg --print-architecture > /tmp/build-arch
 # gets the exact same k3d.
 ARG K3D_VERSION=v5.9.0
 RUN curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh \
-    | TAG=${K3D_VERSION} bash
+    | TAG=${K3D_VERSION} bash \
+    && k3d version
 
-# Linkerd CLI - deliberately the STABLE channel, not edge (also arch-detected
-# internally by the install script). The live cluster this repo was debugged
-# against was running an "edge" CLI/control-plane build (edge-26.6.3, a
-# nightly/pre-release channel), and the identity-cert issue documented in
-# docs/troubleshooting.md ("make azure-demo hangs on Azurite - control plane
-# presents an already-expired certificate after a few days of uptime") was
-# only ever observed on that edge build. Installing stable here avoids
-# reintroducing that class of flakiness. Leaving LINKERD2_VERSION unset
-# intentionally picks up whatever the current latest STABLE release is at
-# build time, rather than a hardcoded version string that will eventually
-# go stale and 404.
-RUN curl --proto '=https' --tlsv1.2 -sSfL https://run.linkerd.io/install-stable | sh
-ENV PATH="/root/.linkerd2/bin:${PATH}"
+# Linkerd CLI - pinned to a specific "edge" release. There is no separate
+# "stable" channel to fall back to: as of February 2024 the Linkerd OSS
+# project stopped publishing stable release artifacts at all (see
+# https://linkerd.io/releases/, "Stable releases" section) - edge releases,
+# published weekly, are now the only official artifact, and the project
+# explicitly considers them production-ready despite the name. An earlier
+# version of this file guessed at a nonexistent "install-stable" endpoint
+# (curl 404) based on a false "avoid edge, use stable" premise - there's
+# nothing to fall back to. Pinning LINKERD2_VERSION explicitly instead of
+# leaving it unset (which would grab whatever the latest edge build happens
+# to be at container-build time) matches the exact version already running
+# on the live cluster this devcontainer targets, confirmed working after
+# fixing the ResourceQuota/proxy-resource-limits issue documented in
+# docs/troubleshooting.md - keeping the CLI and control-plane versions in
+# sync avoids `linkerd upgrade`/`linkerd check` compatibility warnings.
+# The install script drops the binary in $HOME/.linkerd2/bin - since the RUN
+# below executes as root (no USER directive has been set yet), that's
+# /root/.linkerd2/bin. devcontainer.json sets "remoteUser": "vscode" for the
+# actual interactive shell, whose $PATH never includes root's home directory,
+# so `linkerd` would resolve to "command not found" for anyone actually using
+# the devcontainer. Copying it to /usr/local/bin (already on every user's
+# PATH, same as k3d/argocd/k6/gh above) fixes that - matches the pattern
+# every OTHER tool in this file already uses.
+ARG LINKERD2_VERSION=edge-26.6.3
+# `ARG` alone only makes LINKERD2_VERSION available for string substitution
+# within this RUN instruction - it does NOT put it in the shell's exported
+# environment, which is what the piped install script actually reads to
+# decide which version to fetch. `export` here puts it in the current
+# shell's environment, which every command in the pipeline (curl AND the
+# downloaded script running under sh) inherits as a child process.
+RUN export LINKERD2_VERSION=${LINKERD2_VERSION} \
+    && curl --proto '=https' --tlsv1.2 -sSfL https://run.linkerd.io/install-edge | sh \
+    && test -x /root/.linkerd2/bin/linkerd \
+    && cp /root/.linkerd2/bin/linkerd /usr/local/bin/linkerd \
+    && linkerd version --client
 
 # ArgoCD CLI - arch-detected (see note above).
 ARG ARGOCD_VERSION=v3.4.4
