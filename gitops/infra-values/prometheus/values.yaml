@@ -6,6 +6,15 @@
 # for that same trace_id.
 grafana:
   adminPassword: "" # auto-generated secret if left blank; script prints it
+  service:
+    # NodePort here (rather than a `kubectl patch svc kps-grafana` step in
+    # scripts/03-install-observability.sh) so `helm upgrade --install` owns
+    # the whole Service via server-side apply - a separate kubectl-patch
+    # field manager on the same fields breaks every rerun with a
+    # field-manager conflict (same failure mode as the Kong/ArgoCD Services;
+    # see scripts/02-install-platform.sh).
+    type: NodePort
+    nodePort: 30300
   sidecar:
     dashboards:
       enabled: true
